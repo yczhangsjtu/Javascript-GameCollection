@@ -1,0 +1,350 @@
+<html>
+<head>
+<title>Falling</title>
+</head>
+<body>
+	<p>Left: Move left<br/>Right: Move right<br/>P:Pause<br/>A:Start/Stop AI
+	<br/>Attention! The speed is growing faster.
+	</p>
+	<canvas id="display" width=300 height=500>
+	Your browser doesn't support canvas!
+	</canvas>
+<script>
+	const LEFT=0;
+	const RIGHT=1;
+	const HALT=-1;
+	//Keys going to be used
+	var DOM_VK_LEFT=37;
+	var DOM_VK_RIGHT=39;
+	var DOM_VK_P=80;
+	var DOM_VK_A=65;
+	
+	var interval=10;//Interval of the main loop
+	var playerVelocity=3;//Velocity of player
+	var initShelfVelocity=1;//Initial velocity of shelf
+	var shelfVelocity=initShelfVelocity;//Velocity of shelf
+	var maxShelfVelocity=2.25;//Maximum velocity of shelf
+	var displayWidth=300;//Width of the screen
+	var displayHeight=500;//Height of the screen
+	var playerWidth=20;//Width of the player
+	var playerHeight=20;//Height of the player
+	var minHoleWidth=playerWidth*2.5;//Mininum width of the hole
+	var maxHoleWidth=displayWidth*0.2;//Maximum width of the hole
+	var shelfDistance=playerHeight*4;//Distance between two shelves
+	var backgroundColor="yellow";//Background color
+	var playerColor="red";//Color of the player
+	var g=0.3;//Gravity acceleration
+	var Player=new player();//Set up the player
+	var shelves=new Array();//Set up the array of the shelves
+	var Pause=false;//Initially not pause
+	var AIOn=false;//Initially AI is not on
+	var leftKeyDown=false;
+	var rightKeyDown=false;
+	var speedUpScore=4000;//Determine how many scores cause speed up 1 unit
+	var threshode=playerWidth;//Minimum distance between two hole on a shelf
+							//if they are separated
+	//Events
+	var leftInstruction = new CustomEvent('command',{'detail':LEFT});
+	var rightInstruction = new CustomEvent('command',{'detail':RIGHT});
+	var haltInstruction = new CustomEvent('command',{'detail':HALT});
+	//Add Event Listeners
+	window.addEventListener('keydown',handleKeyDownEvent);//Catch keydown
+	window.addEventListener('keyup',handleKeyUpEvent);//Catch keyup
+	window.addEventListener('command',execute);//Catch command
+	
+	setInterval("game()",interval);//Set up the timer to execute the main loop
+	
+	function handleKeyDownEvent(evt)//Function to handle key down event
+	{
+		if(evt.keyCode==DOM_VK_P)
+			Pause=!Pause;//Set pause state
+		if(Pause) return;
+		if(evt.keyCode==DOM_VK_A)
+			AIOn=!AIOn;//Set AI state
+		if(AIOn) return;
+		if(evt.keyCode==DOM_VK_LEFT)
+		{
+			leftKeyDown=true;//Set key state
+			window.dispatchEvent(leftInstruction);//Dispatch move left command
+		}
+		if(evt.keyCode==DOM_VK_RIGHT)
+		{
+			rightKeyDown=true;//Set key state
+			window.dispatchEvent(rightInstruction);//Dispatch move right command
+		}
+	}
+	
+	function handleKeyUpEvent(evt)
+	{
+		if(evt.keyCode==DOM_VK_LEFT)//Set key state
+			leftKeyDown=false;
+		if(evt.keyCode==DOM_VK_RIGHT)//Set key state
+			rightKeyDown=false;
+		if(leftKeyDown)//Check the current state and dispatch command
+			window.dispatchEvent(leftInstruction);
+		else if(rightKeyDown)
+			window.dispatchEvent(rightInstruction);
+		else
+			window.dispatchEvent(haltInstruction);
+	}
+	
+	function execute(evt)
+	{
+		Player.direction = evt.detail;//Change direction according to the event
+									//object
+	}
+	
+	
+	function initialize()//Initialize
+	{
+		Player=new player();//Set player to be new
+		shelves=new Array();//Set shelves to be new
+		shelfVelocity=initShelfVelocity;//Initialize the shelf velocity
+		leftKeyDown=false;
+		rightKeyDown=false;
+	}
+	
+	function game()//Main loop
+	{
+		if(!Pause)//If not paused
+		{
+			shiftShelves();//Move the shelves
+			Player.drop();//Player drops
+			Player.move();//Player moves left-right
+			if(AIOn)AI();//If AI is on, AI dispatch commands
+			//Raise the speed with the growing of the score
+			if(shelfVelocity < maxShelfVelocity)
+				shelfVelocity=initShelfVelocity+Player.score/speedUpScore;
+		}
+		draw();//Draw the game
+	}
+	
+	function AI()//AI
+	{
+		var row=Math.round((Player.y-shelves[0].y)/shelfDistance);//Get the
+		//current row of player
+		if( row<0 )
+		{	//If player is too higher, halt
+			window.dispatchEvent(haltInstruction);
+			return;
+		}
+		if( row>=shelves.length ||
+			shelves[row].y<Player.y || shelves[row].y>Player.y+playerHeight ||
+			( shelves[row].hole1x-shelves[row].hole1w/2<Player.x &&
+			shelves[row].hole1x+shelves[row].hole1w/2>Player.x+playerWidth) ||
+			( shelves[row].hole2x-shelves[row].hole2w/2<Player.x &&
+			shelves[row].hole2x+shelves[row].hole2w/2>Player.x+playerWidth) )
+		{	//If player is too low, not on the board, on the hole, halt
+			window.dispatchEvent(haltInstruction);
+			return;
+		}
+		if( shelves[row].hole1x-shelves[row].hole1w/2>Player.x &&
+			shelves[row].hole2x-shelves[row].hole2w/2>Player.x)
+		{	//If player is left to the two holes, move right
+			window.dispatchEvent(rightInstruction);
+			return;
+		}
+		if(	shelves[row].hole1x+shelves[row].hole1w/2<Player.x+playerWidth &&
+			shelves[row].hole2x+shelves[row].hole2w/2<Player.x+playerWidth)
+		{	//If player is right to the two holes, move left
+			window.dispatchEvent(leftInstruction);
+			return;
+		}
+		if(	shelves[row].hole1x-shelves[row].hole1w/2>Player.x &&
+			shelves[row].hole2x+shelves[row].hole2w/2<Player.x+playerWidth)
+		{	//If player is left to the first hole, right to the second hole
+			//Compare the distance and move to the nearer
+			if(shelves[row].hole1x-shelves[row].hole1w/2-Player.x
+			 < Player.x+playerWidth-shelves[row].hole2x-shelves[row].hole2w/2)
+				window.dispatchEvent(rightInstruction);
+			else
+				window.dispatchEvent(leftInstruction);
+			return;
+		}
+		if(	shelves[row].hole2x-shelves[row].hole2w/2>Player.x &&
+			shelves[row].hole1x+shelves[row].hole1w/2<Player.x+playerWidth)
+		{	//If player is left to the second hole, right to the first hole
+			//Compare the distance and move to the nearer
+			if(shelves[row].hole2x-shelves[row].hole2w/2-Player.x
+			 < Player.x+playerWidth-shelves[row].hole1x-shelves[row].hole1w/2)
+				window.dispatchEvent(rightInstruction);
+			else
+				window.dispatchEvent(leftInstruction);
+			return;
+		}
+		window.dispatchEvent(haltInstruction);
+	}
+	
+	function shiftShelves()//Move all the shelves up
+	{
+		if(	shelves.length==0 )//If no shelf currently, push new one
+			shelves.push(new shelf());
+		for(var i in shelves)//Move all the shelves
+			shelves[i].y -= shelfVelocity;
+		if(shelves[0].y<0)//If the first shelf is out, remove it
+			shelves.shift();
+		if( shelves[shelves.length-1].y < displayHeight-shelfDistance )
+			//If the last is too high, push new shelf
+			shelves.push(new shelf());
+	}
+	
+	function player()//Constructor of object player
+	{
+		this.hVelocity=playerVelocity;//Horizonal velocity
+		this.vVelocity=0;//Vertical velocity
+		this.width=playerWidth;//Width of the player
+		this.height=playerHeight;//Height of the player
+		this.x=(displayWidth-playerWidth)/2;//X position of the player
+		this.y=0;//Y position of the player
+		this.score=0;//Score of the player
+		this.direction=HALT;//Direction of the player or "HALT"
+	}
+	
+	player.prototype.move=function()//Move method of player
+	{
+		if(this.direction==LEFT)//If direction is left
+			if(this.x >= this.hVelocity)//X position is large enough
+				this.x-=this.hVelocity;//Move left
+		if(this.direction==RIGHT)//If direction is right, X position is not too
+								//large, move right
+			if(this.x + this.hVelocity + this.width<displayWidth)
+				this.x += this.hVelocity;
+	}
+	
+	player.prototype.drop=function()//Drop method of player
+	{
+		this.y += this.vVelocity;//Drop first
+		this.score += this.vVelocity;//Add score
+		this.vVelocity += g;//Add vertical velocity
+		if( !validPosition(this) )//If the new position is not valid,
+			this.vVelocity = 0;//Set the vertical velocity to be 0
+		adaptPosition(this);//Adapt the position to make it valid
+	}
+	
+	function shelf()//Constructor of shelf object
+	{
+		do
+		{
+			//Position of the first hole
+			this.hole1x=Math.random()*displayWidth;
+			//Width of the first hole
+			this.hole1w=Math.random()*(maxHoleWidth-minHoleWidth)+minHoleWidth;
+			//Position of the second hole
+			this.hole2x=Math.random()*displayWidth;
+			//Width of the second hole
+			this.hole2w=Math.random()*(maxHoleWidth-minHoleWidth)+minHoleWidth;
+		}while( (this.hole2x-this.hole1x-(this.hole2w+this.hole1w)/2>0 &&
+				this.hole2x-this.hole1x-(this.hole2w+this.hole1w)/2<threshode)||
+				(this.hole1x-this.hole2x-(this.hole2w+this.hole1w)/2>0 &&
+				this.hole1x-this.hole2x-(this.hole2w+this.hole1w)/2<threshode));
+		this.y=displayHeight;//New shelf should be at the bottom
+	}
+	
+	//Judge whether a position of the player is valid
+	function validPosition(aPlayer)
+	{	//get out of the screen, invalid
+		if(aPlayer.y+playerHeight>displayHeight) return false;
+		//the row of the player
+		var row=Math.round((aPlayer.y-shelves[0].y)/shelfDistance);
+		if( row<0 ) return true;//High enough to avoid all shelves
+		if( row>=shelves.length ) return true;//Low enough to touch the bottom
+		if( shelves[row].y<aPlayer.y || shelves[row].y>aPlayer.y+playerHeight )
+			return true;//Not touching the shelf
+		if( shelves[row].hole1x-shelves[row].hole1w/2<aPlayer.x &&
+			shelves[row].hole1x+shelves[row].hole1w/2>aPlayer.x+playerWidth)
+			return true;//On the first hole
+		if( shelves[row].hole2x-shelves[row].hole2w/2<aPlayer.x &&
+			shelves[row].hole2x+shelves[row].hole2w/2>aPlayer.x+playerWidth)
+			return true;//On the second hole
+		return false;
+	}
+	
+	function adaptPosition(aPlayer)//Make the position of the player valid
+	{
+		var row=Math.round((aPlayer.y-shelves[0].y)/shelfDistance);//Get the row
+		if(aPlayer.y+playerHeight>displayHeight)//Too low, move higher, just
+			aPlayer.y=displayHeight-playerHeight;//touch the bottom
+		if( row<0 ) return;//Row is not a valid index of shelf
+		if( row>=shelves.length ) return;//Just return
+		if( shelves[row].y>aPlayer.y && shelves[row].y<aPlayer.y+playerHeight )
+		//Touch the board
+			if( (shelves[row].hole1x-shelves[row].hole1w/2>aPlayer.x ||
+			shelves[row].hole1x+shelves[row].hole1w/2<aPlayer.x+playerWidth) &&
+			(shelves[row].hole2x-shelves[row].hole2w/2>aPlayer.x ||
+			shelves[row].hole2x+shelves[row].hole2w/2<aPlayer.x+playerWidth))
+			//And is not on the hole
+				aPlayer.y=shelves[row].y-playerHeight;//Move player, just let
+				//it lying on the board
+		
+		if(Player.y<0)//Reach the top, game over
+		{
+			alert("You lose!\n"+"Your score is " + Math.floor(Player.score) );
+			initialize();
+		}
+	}
+	
+	function draw()//Draw function
+	{
+		drawBackground();
+		drawPlayer();
+		drawText();
+	}
+	
+	function drawBackground()//Draw background
+	{
+		var ctx=document.getElementById('display').getContext('2d');
+		ctx.fillStyle=backgroundColor;
+		ctx.fillRect(0,0,displayWidth,displayHeight);
+		drawShelves();
+	}
+	
+	function drawShelves()
+	{
+		for(var i in shelves)
+		{
+			var ctx=document.getElementById('display').getContext('2d');
+			ctx.beginPath();
+			ctx.moveTo(0,shelves[i].y);
+			ctx.lineTo(displayWidth,shelves[i].y);//Draw a line
+			ctx.stroke();
+			ctx.fillStyle=backgroundColor;//Cover the hole with rectangle
+			//of the same color to the background
+			ctx.fillRect(shelves[i].hole1x-shelves[i].hole1w/2,shelves[i].y-2,
+				shelves[i].hole1w,4);
+			ctx.fillRect(shelves[i].hole2x-shelves[i].hole2w/2,shelves[i].y-2,
+				shelves[i].hole2w,4);
+		}
+	}
+	
+	function drawPlayer()//Draw player
+	{
+		var ctx=document.getElementById('display').getContext('2d');
+		ctx.fillStyle=playerColor;
+		ctx.fillRect(Player.x,Player.y,playerWidth,playerHeight);
+	}
+	
+	function drawText()//Print texts
+	{
+		var ctx = document.getElementById("display").getContext('2d');
+		ctx.fillStyle = "black";
+		ctx.font = "20px sans-serif";
+		var text = "Score:" + Math.floor(Player.score);
+		ctx.fillText( text, 0, 20 );
+		if(Pause)
+		{
+			text="Press P to resume";
+			ctx.fillText( text, 0, 40 );
+		}
+		if(AIOn)
+		{
+			text="Computer is taking control now";
+			ctx.fillText( text, 0, 60 );
+			text="Press A to return";
+			ctx.fillText( text, 0, 80 );
+		}
+			
+	}
+	
+</script>
+</body>
+</html>
