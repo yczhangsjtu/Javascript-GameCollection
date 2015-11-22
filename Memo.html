@@ -1,0 +1,55 @@
+<!doctype html>
+<html charset="utf8">
+<head>
+<title>Memo</title>
+</head>
+<body>
+<p id='Q'></p>
+<p id='A'></p>
+<button onclick='showAnswer()'>Show Answer</button>
+<button onclick='next()'>Next</button>
+<button onclick='chmod()'>Change Mode</button>
+<p id='M'>Inc</p>
+
+<script src='data.js'></script>
+<script>
+var curr = 0;
+var mode = 0; // 0: increment; 1: decrement; 2: random.
+Mode = ["Inc","Dec","Rnd"];
+document.getElementById('Q').innerHTML = data[curr][0];
+function showAnswer()
+{
+	answer = data[curr][1];
+	document.getElementById('A').innerHTML = answer;
+}
+
+function next()
+{
+	switch(mode)
+	{
+	case 0:
+		curr++;
+		if(curr >= data.length)
+			curr = 0;
+		break;
+	case 1:
+		curr--;
+		if(curr < 0)
+			curr = data.length - 1;
+		break;
+	default:
+		curr = Math.floor(Math.random() * data.length);
+	}
+	document.getElementById('A').innerHTML = '';
+	document.getElementById('Q').innerHTML = data[curr][0];
+}
+
+function chmod()
+{
+	mode ++;
+	if(mode >= 3) mode = 0;
+	document.getElementById('M').innerHTML = Mode[mode];
+}
+</script>
+</body>
+</html>
