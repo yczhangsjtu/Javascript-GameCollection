@@ -1,0 +1,287 @@
+<html>
+<head><title>War</title></head>
+<script type="text/javascript">
+var teamDrawSize = 10;
+var interval = 30;
+var gameTimer=setInterval("step();",interval);
+var teams = [];
+var fieldWidth = 1000;
+var fieldHeight =  700;
+var messages = [];
+var bulletSpeed = 15;
+var bullets = [];
+var bulletLength = 1;
+
+function Team(level,size)
+{
+	this.level = level;
+	this.size = size;
+	this.x = 0;
+	this.y = 0;
+	this.vx = 0;
+	this.vy = 0;
+}
+
+Team.prototype.discount = function()
+{
+	if(this.size > 0)
+	{
+		this.size--;
+		if(this.level > 1)
+		{
+			var newlevel = this.level-1;
+			if(this.size == 1)
+			{
+				if(this.level > 1)
+				{
+					this.level--;
+					this.size = 9;
+				}
+			}
+			return new Team(newlevel,9);
+		}
+		else
+		{
+			return null;
+		}
+	}
+	else
+	{
+		this.size = 0;
+		return null;
+	}
+}
+
+Team.prototype.move = function(dx,dy)
+{
+	this.x += dx;
+	this.y += dy;
+	if(this.x < 0) this.x = 0;
+	if(this.y < 0) this.y = 0;
+	if(this.x > fieldWidth)  this.x = fieldWidth;
+	if(this.y > fieldHeight) this.y = fieldHeight;
+}
+
+Team.prototype.moveTo = function(x,y)
+{
+	this.x = x;
+	this.y = y;
+	if(this.x < 0) this.x = 0;
+	if(this.y < 0) this.y = 0;
+	if(this.x > fieldWidth)  this.x = fieldWidth;
+	if(this.y > fieldHeight) this.y = fieldHeight;
+}
+
+Team.prototype.moveOn = function()
+{
+	this.move(this.vx,this.vy);
+}
+
+Team.prototype.draw = function()
+{
+	var context = document.getElementById("canvas").getContext("2d");
+	context.fillStyle = "rgb(255,255,255)";
+	context.linewidth = 1;
+	for(var i = this.level-1; i >= 0; i--)
+		context.strokeRect(this.x-teamDrawSize-2-i*3,this.y-teamDrawSize-2-i*3,
+		(teamDrawSize+2+i*3)*2,(teamDrawSize+2+i*3)*2);
+	for(var i = 0; i < this.size; i++)
+	{
+		var lx = ((i % 3) - 1) * teamDrawSize * 0.8;
+		var ly = ((Math.floor(i / 3)) - 1) * teamDrawSize * 0.8;
+		context.fillStyle = "rgb(0,0,0)";
+		context.fillRect(this.x + lx - 1, this.y + ly - 1, 2, 2);
+	}
+}
+
+Team.prototype.sendout = function(array)
+{
+	if(this.level == 1) return;
+	var newteam = this.discount();
+	if(newteam != null)
+		array.push(newteam);
+	newteam.x = this.x + teamDrawSize * (randomInt(1)*2-1) * 2;
+	newteam.y = this.y + teamDrawSize * (randomInt(1)*2-1) * 2;
+}
+
+Team.prototype.fire = function(tx,ty)
+{
+	if(this.level != 1) return;
+	var dx = tx - this.x;
+	var dy = ty - this.y;
+	var norm = Math.sqrt(dx*dx+dy*dy);
+	dx *= teamDrawSize/norm * 2;
+	dy *= teamDrawSize/norm * 2;
+	messages.push(new Message(this,null,"fire",[[this.x+dx,this.y+dy],[tx,ty]]));
+}
+
+function Message(sender,receiver,type,data)
+{
+	this.sender = sender;
+	this.receiver = receiver;
+	this.type = type;
+	this.data = data;
+}
+
+function Bullet(x,y,dir)
+{
+	this.x = x;
+	this.y = y;
+	var norm = Math.sqrt(dir[0]*dir[0]+dir[1]*dir[1]);
+	this.dir = [dir[0],dir[1]];
+	this.dir[0] *= bulletSpeed/norm;
+	this.dir[1] *= bulletSpeed/norm;
+}
+
+Bullet.prototype.moveOn = function()
+{
+	this.x += this.dir[0];
+	this.y += this.dir[1];
+}
+
+Bullet.prototype.draw = function()
+{
+	var context = document.getElementById("canvas").getContext("2d");
+	drawLine(context,this.x,this.y,this.x+this.dir[0]*bulletLength,this.y+this.dir[1]*bulletLength);
+}
+
+Bullet.prototype.hit = function(team)
+{
+	return this.x > team.x - teamDrawSize && this.x < team.x + teamDrawSize
+		&& this.y > team.y - teamDrawSize && this.y < team.y + teamDrawSize;
+}
+
+function randomInt(num)
+{
+	return dir=Math.floor(Math.random()*num);
+}
+
+function init()
+{
+	for(var i = 0; i < 10; i++)
+	{
+		teams.push(new Team(3,9));
+		teams[i].x = randomInt(fieldWidth);
+		teams[i].y = randomInt(700);
+	}
+}
+
+function drawLine(context,x0,y0,x1,y1)
+{
+	context.beginPath();
+	context.moveTo(x0,y0);
+	context.lineTo(x1,y1);
+	context.stroke();
+}
+	  
+function drawBackground()
+{
+	var context = document.getElementById("canvas").getContext("2d");
+	context.fillStyle = "rgb(255,255,255)";
+	context.fillRect(0,0,fieldWidth,700);
+}
+
+function step()
+{
+	drawBackground();
+	for(var team in teams)
+	{
+		if(teams[team].size == 0)
+		{
+			teams[team] = teams[teams.length-1];
+			teams.pop();
+		}
+	}
+	for(var team in teams)
+	{
+		teams[team].moveOn();
+		teams[team].draw();
+	}
+	for(var bullet in bullets)
+	{
+		if(bullets[bullet].x < 0 || bullets[bullet].y < 0 ||
+		   bullets[bullet].x > fieldWidth || bullets[bullet].y > fieldHeight)
+		{
+			bullets[bullet] = bullets[bullets.length-1];
+			bullets.pop();
+		}
+	}
+	for(var bullet in bullets)
+	{
+		bullets[bullet].moveOn();
+		bullets[bullet].draw();
+	}
+	AI();
+	checkHit();
+	processMessages();
+}
+
+function AI()
+{
+	for(var team in teams)
+	{
+		if(randomInt(100)<2)
+		{
+			teams[team].vx = randomInt(5)-2;
+			teams[team].vy = randomInt(5)-2;
+		}
+		if(randomInt(300)<1)
+		{
+			teams[team].sendout(teams);
+		}
+		if(teams[team].level == 1)
+		{
+			if(randomInt(100)<1)
+			{
+				teams[team].fire(randomInt(fieldWidth),randomInt(fieldHeight));
+			}
+		}
+	}
+}
+
+function processMessages()
+{
+	for(var message in messages)
+	{
+		var msg = messages[message];
+		if(msg.type == "fire")
+			processFireMessage(msg);
+		else if(msg.type == "hit")
+			processHitMessage(msg);
+	}
+	messages = [];
+}
+
+function checkHit()
+{
+	for(var bullet in bullets)
+	{
+		for(var team in teams)
+		{
+			if(teams[team].level > 1) continue;
+			if(bullets[bullet].hit(teams[team]))
+				messages.push(new Message(bullets[bullet],teams[team],"hit",null));
+		}
+	}
+}
+
+function processFireMessage(msg)
+{
+	var f = msg.data[0];
+	var t = msg.data[1];
+	bullets.push(new Bullet(f[0],f[1],[t[0]-f[0],t[1]-f[1]]));
+}
+
+function processHitMessage(msg)
+{
+	msg.receiver.discount();
+	msg.sender.x = -1000;
+}
+
+window.onload = init;
+
+</script>
+<body>
+<canvas id="canvas" height=700 width=1000>Your browser does not support HTML5 canvas.</canvas>
+</body>
+</html>
